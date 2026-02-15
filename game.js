@@ -259,7 +259,8 @@ function render(timeSec) {
 
   ctx.fillStyle = "rgba(20, 18, 28, 0.8)";
   ctx.font = "600 16px 'Avenir Next', 'Segoe UI', sans-serif";
-  ctx.fillText("Neko: Left/Right arrows to move", 18, 28);
+  const hintText = isMobileLike ? "Neko: Touch left/right side of screen" : "Neko: Left/Right arrows to move";
+  ctx.fillText(hintText, 18, 28);
 }
 
 function frame(now) {

@@ -243,10 +243,10 @@ function drawNeko() {
 
   // Paint eye color behind the sprite so transparent eye gaps reveal color.
   const eyeUnderColor = "#dbe86b";
-  const eyePatchW = Math.max(46, Math.round(w * 0.27));
-  const eyePatchH = Math.max(16, Math.round(h * 0.19));
-  const eyePatchY = y + Math.round(h * 0.30);
-  const eyePatchX = x + Math.round(w * 0.69);
+  const eyePatchW = airborne ? Math.max(34, Math.round(w * 0.20)) : Math.max(46, Math.round(w * 0.27));
+  const eyePatchH = airborne ? Math.max(14, Math.round(h * 0.16)) : Math.max(16, Math.round(h * 0.19));
+  const eyePatchY = airborne ? y + Math.round(h * 0.32) : y + Math.round(h * 0.30);
+  const eyePatchX = airborne ? x + Math.round(w * 0.72) : x + Math.round(w * 0.69);
 
   ctx.fillStyle = eyeUnderColor;
   ctx.fillRect(eyePatchX, eyePatchY, eyePatchW, eyePatchH);

@@ -79,19 +79,83 @@ const houseSprite = [
   "..oooooooooooooooo..",
 ];
 
-const backgroundItems = [
-  { type: "tree", x: 40, y: 255, scale: 5 },
-  { type: "house", x: 150, y: 238, scale: 5 },
-  { type: "tree", x: 330, y: 265, scale: 5 },
-  { type: "house", x: 500, y: 245, scale: 5 },
-  { type: "tree", x: 690, y: 262, scale: 5 },
-  { type: "house", x: 860, y: 240, scale: 5 },
-  { type: "tree", x: 1035, y: 266, scale: 5 },
-  { type: "house", x: 1210, y: 242, scale: 5 },
-  { type: "tree", x: 1390, y: 264, scale: 5 },
-  { type: "house", x: 1495, y: 244, scale: 5 },
+const WORLD_SCREENS = [
+  {
+    skyTop: "#8b8f9d",
+    skyMid: "#afb0b8",
+    skyBottom: "#c1c1c7",
+    glowA: "rgba(241, 184, 177, 0.68)",
+    glowB: "rgba(230, 170, 165, 0.30)",
+    items: [
+      { type: "tree", x: 40, y: 255, scale: 5 },
+      { type: "house", x: 150, y: 238, scale: 5 },
+      { type: "tree", x: 330, y: 265, scale: 5 },
+      { type: "house", x: 500, y: 245, scale: 5 },
+      { type: "tree", x: 690, y: 262, scale: 5 },
+      { type: "house", x: 860, y: 240, scale: 5 },
+      { type: "tree", x: 1035, y: 266, scale: 5 },
+      { type: "house", x: 1210, y: 242, scale: 5 },
+      { type: "tree", x: 1390, y: 264, scale: 5 },
+      { type: "house", x: 1495, y: 244, scale: 5 },
+    ],
+  },
+  {
+    skyTop: "#7c8c9b",
+    skyMid: "#a1b0bc",
+    skyBottom: "#b7c1c7",
+    glowA: "rgba(178, 203, 244, 0.54)",
+    glowB: "rgba(149, 177, 223, 0.28)",
+    items: [
+      { type: "house", x: 65, y: 242, scale: 5 },
+      { type: "tree", x: 260, y: 262, scale: 5 },
+      { type: "tree", x: 440, y: 255, scale: 5 },
+      { type: "house", x: 620, y: 240, scale: 5 },
+      { type: "tree", x: 820, y: 264, scale: 5 },
+      { type: "house", x: 980, y: 238, scale: 5 },
+      { type: "tree", x: 1165, y: 258, scale: 5 },
+      { type: "house", x: 1335, y: 241, scale: 5 },
+      { type: "tree", x: 1490, y: 262, scale: 5 },
+    ],
+  },
+  {
+    skyTop: "#908594",
+    skyMid: "#b3aab3",
+    skyBottom: "#c8bec6",
+    glowA: "rgba(250, 194, 155, 0.62)",
+    glowB: "rgba(237, 167, 133, 0.28)",
+    items: [
+      { type: "tree", x: 80, y: 264, scale: 5 },
+      { type: "tree", x: 235, y: 256, scale: 5 },
+      { type: "house", x: 390, y: 241, scale: 5 },
+      { type: "tree", x: 590, y: 264, scale: 5 },
+      { type: "house", x: 765, y: 243, scale: 5 },
+      { type: "tree", x: 965, y: 261, scale: 5 },
+      { type: "house", x: 1135, y: 238, scale: 5 },
+      { type: "tree", x: 1320, y: 258, scale: 5 },
+      { type: "house", x: 1475, y: 244, scale: 5 },
+    ],
+  },
+  {
+    skyTop: "#7f8a86",
+    skyMid: "#aab4ad",
+    skyBottom: "#c1c8c2",
+    glowA: "rgba(210, 233, 194, 0.5)",
+    glowB: "rgba(177, 211, 162, 0.24)",
+    items: [
+      { type: "house", x: 40, y: 240, scale: 5 },
+      { type: "tree", x: 230, y: 264, scale: 5 },
+      { type: "house", x: 405, y: 244, scale: 5 },
+      { type: "tree", x: 585, y: 259, scale: 5 },
+      { type: "tree", x: 740, y: 266, scale: 5 },
+      { type: "house", x: 895, y: 238, scale: 5 },
+      { type: "tree", x: 1095, y: 262, scale: 5 },
+      { type: "house", x: 1260, y: 245, scale: 5 },
+      { type: "tree", x: 1450, y: 258, scale: 5 },
+    ],
+  },
 ];
 
+let currentScreen = 0;
 let lastTime = performance.now();
 
 function clamp(v, min, max) {
@@ -102,6 +166,12 @@ function approach(current, target, delta) {
   if (current < target) return Math.min(current + delta, target);
   if (current > target) return Math.max(current - delta, target);
   return current;
+}
+
+function getScreen() {
+  const len = WORLD_SCREENS.length;
+  const i = ((currentScreen % len) + len) % len;
+  return WORLD_SCREENS[i];
 }
 
 function tryJump() {
@@ -154,8 +224,8 @@ function drawPixelArt(rows, ox, oy, scale = 3) {
   }
 }
 
-function drawScenery() {
-  for (const item of backgroundItems) {
+function drawScenery(screen) {
+  for (const item of screen.items) {
     if (item.type === "tree") {
       drawPixelArt(treeSprite, item.x, item.y, item.scale);
     } else {
@@ -165,10 +235,12 @@ function drawScenery() {
 }
 
 function drawBackground(timeSec) {
+  const screen = getScreen();
+
   const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, "#8b8f9d");
-  sky.addColorStop(0.56, "#afb0b8");
-  sky.addColorStop(1, "#c1c1c7");
+  sky.addColorStop(0, screen.skyTop);
+  sky.addColorStop(0.56, screen.skyMid);
+  sky.addColorStop(1, screen.skyBottom);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -180,8 +252,8 @@ function drawBackground(timeSec) {
     185,
     280 + Math.sin(timeSec) * 8,
   );
-  glow.addColorStop(0, "rgba(241, 184, 177, 0.68)");
-  glow.addColorStop(0.45, "rgba(230, 170, 165, 0.30)");
+  glow.addColorStop(0, screen.glowA);
+  glow.addColorStop(0.45, screen.glowB);
   glow.addColorStop(1, "rgba(230, 170, 165, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -189,7 +261,7 @@ function drawBackground(timeSec) {
   ctx.fillStyle = "#adb0b8";
   ctx.fillRect(0, GROUND_Y - 60, canvas.width, 60);
 
-  drawScenery();
+  drawScenery(screen);
 
   ctx.fillStyle = "#9ca0a9";
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
@@ -243,9 +315,9 @@ function drawNeko() {
 
   // Paint eye color behind the sprite so transparent eye gaps reveal color.
   const eyeUnderColor = "#dbe86b";
-  const eyePatchW = airborne ? Math.max(34, Math.round(w * 0.20)) : Math.max(46, Math.round(w * 0.27));
+  const eyePatchW = airborne ? Math.max(34, Math.round(w * 0.2)) : Math.max(46, Math.round(w * 0.27));
   const eyePatchH = airborne ? Math.max(14, Math.round(h * 0.16)) : Math.max(16, Math.round(h * 0.19));
-  const eyePatchY = airborne ? y + Math.round(h * 0.32) : y + Math.round(h * 0.30);
+  const eyePatchY = airborne ? y + Math.round(h * 0.32) : y + Math.round(h * 0.3);
   const eyePatchX = airborne ? x + Math.round(w * 0.72) : x + Math.round(w * 0.69);
 
   ctx.fillStyle = eyeUnderColor;
@@ -266,7 +338,21 @@ function update(dt) {
   neko.x += neko.vx * dt;
 
   const halfWidth = sprite.ready && sprite.frames[0] ? (sprite.frames[0].width * sprite.drawScale) / 2 : 90;
-  neko.x = clamp(neko.x, halfWidth + 8, canvas.width - halfWidth - 8);
+  const minX = halfWidth + 8;
+  const maxX = canvas.width - halfWidth - 8;
+
+  // Screen transitions at full left/right edges.
+  if (neko.x > maxX && neko.vx > 0) {
+    currentScreen += 1;
+    neko.x = minX;
+    neko.facing = 1;
+  } else if (neko.x < minX && neko.vx < 0) {
+    currentScreen -= 1;
+    neko.x = maxX;
+    neko.facing = -1;
+  } else {
+    neko.x = clamp(neko.x, minX, maxX);
+  }
 
   if (Math.abs(neko.vx) > 0.8) {
     neko.facing = Math.sign(neko.vx);

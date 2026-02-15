@@ -21,6 +21,8 @@ const neko = {
   accel: 1300,
   decel: 1800,
   walkTime: 0,
+  animLoco: 0,
+  blockedMove: false,
 };
 
 const sprite = {
@@ -41,6 +43,19 @@ const pixelPalette = {
   w: "#d5b88b",
   d: "#6f483d",
   o: "#b97a52",
+};
+
+const obstaclePalette = {
+  ".": null,
+  s: "#6f5a4d",
+  S: "#3f312b",
+  b: "#766251",
+  B: "#4b3a33",
+  g: "#7d8996",
+  G: "#58626a",
+  o: "#c9894f",
+  O: "#8f5f38",
+  l: "#d6c37d",
 };
 
 const treeSprite = [
@@ -79,6 +94,40 @@ const houseSprite = [
   "..oooooooooooooooo..",
 ];
 
+const obstacleSprites = {
+  shoe: [
+    "..SSSS....",
+    ".SssssS...",
+    "SssssssS..",
+    ".SSSSssS..",
+    "...SssS...",
+    "..SSSS....",
+  ],
+  bag: [
+    "...BBBB...",
+    "..BbbbbB..",
+    ".BbbbbbbB.",
+    ".BbbbbbbB.",
+    ".BbbllbbB.",
+    "..BBBBBB..",
+  ],
+  cone: [
+    "...o...",
+    "..ooo..",
+    "..oOo..",
+    ".ooOoo.",
+    ".ooooo.",
+    "ooooooo",
+  ],
+  crate: [
+    "GGGGGG",
+    "GggggG",
+    "GgGGgG",
+    "GggggG",
+    "GGGGGG",
+  ],
+};
+
 const WORLD_SCREENS = [
   {
     skyTop: "#8b8f9d",
@@ -98,6 +147,10 @@ const WORLD_SCREENS = [
       { type: "tree", x: 1390, y: 264, scale: 5 },
       { type: "house", x: 1495, y: 244, scale: 5 },
     ],
+    obstacles: [
+      { kind: "shoe", x: 380, scale: 4 },
+      { kind: "bag", x: 980, scale: 4 },
+    ],
   },
   {
     skyTop: "#7c8c9b",
@@ -115,6 +168,10 @@ const WORLD_SCREENS = [
       { type: "tree", x: 1165, y: 258, scale: 5 },
       { type: "house", x: 1335, y: 241, scale: 5 },
       { type: "tree", x: 1490, y: 262, scale: 5 },
+    ],
+    obstacles: [
+      { kind: "cone", x: 520, scale: 5 },
+      { kind: "shoe", x: 1210, scale: 4 },
     ],
   },
   {
@@ -134,6 +191,10 @@ const WORLD_SCREENS = [
       { type: "tree", x: 1320, y: 258, scale: 5 },
       { type: "house", x: 1475, y: 244, scale: 5 },
     ],
+    obstacles: [
+      { kind: "crate", x: 300, scale: 5 },
+      { kind: "bag", x: 1080, scale: 4 },
+    ],
   },
   {
     skyTop: "#7f8a86",
@@ -151,6 +212,10 @@ const WORLD_SCREENS = [
       { type: "tree", x: 1095, y: 262, scale: 5 },
       { type: "house", x: 1260, y: 245, scale: 5 },
       { type: "tree", x: 1450, y: 258, scale: 5 },
+    ],
+    obstacles: [
+      { kind: "cone", x: 430, scale: 5 },
+      { kind: "crate", x: 1320, scale: 5 },
     ],
   },
 ];
@@ -172,6 +237,31 @@ function getScreen() {
   const len = WORLD_SCREENS.length;
   const i = ((currentScreen % len) + len) % len;
   return WORLD_SCREENS[i];
+}
+
+function getNekoSize() {
+  const base = sprite.ready && sprite.frames[0] ? sprite.frames[0] : { width: 312, height: 208 };
+  return {
+    w: Math.round(base.width * sprite.drawScale),
+    h: Math.round(base.height * sprite.drawScale),
+  };
+}
+
+function getObstacleInstances(screen) {
+  return (screen.obstacles || []).map((ob) => {
+    const rows = obstacleSprites[ob.kind] || obstacleSprites.shoe;
+    const scale = ob.scale || 4;
+    const w = rows[0].length * scale;
+    const h = rows.length * scale;
+    return {
+      ...ob,
+      rows,
+      scale,
+      w,
+      h,
+      y: GROUND_Y - h,
+    };
+  });
 }
 
 function tryJump() {
@@ -211,12 +301,12 @@ function loadFrames() {
     });
 }
 
-function drawPixelArt(rows, ox, oy, scale = 3) {
+function drawPixelArt(rows, ox, oy, scale = 3, palette = pixelPalette) {
   for (let y = 0; y < rows.length; y += 1) {
     const row = rows[y];
     for (let x = 0; x < row.length; x += 1) {
       const code = row[x];
-      const color = pixelPalette[code];
+      const color = palette[code];
       if (!color) continue;
       ctx.fillStyle = color;
       ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
@@ -231,6 +321,12 @@ function drawScenery(screen) {
     } else {
       drawPixelArt(houseSprite, item.x, item.y, item.scale);
     }
+  }
+}
+
+function drawObstacles(screen) {
+  for (const ob of getObstacleInstances(screen)) {
+    drawPixelArt(ob.rows, ob.x, ob.y, ob.scale, obstaclePalette);
   }
 }
 
@@ -265,6 +361,8 @@ function drawBackground(timeSec) {
 
   ctx.fillStyle = "#9ca0a9";
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+  drawObstacles(screen);
 }
 
 function drawShadow(speedNorm) {
@@ -278,11 +376,12 @@ function drawShadow(speedNorm) {
 }
 
 function drawNeko() {
-  const speedNorm = clamp(Math.abs(neko.vx) / neko.maxSpeed, 0, 1);
+  const speedNormPhysical = clamp(Math.abs(neko.vx) / neko.maxSpeed, 0, 1);
+  const speedNorm = clamp(neko.animLoco, 0, 1);
   const moving = speedNorm > 0.03;
   const airborne = neko.y < GROUND_Y - 0.5;
 
-  drawShadow(speedNorm);
+  drawShadow(speedNormPhysical);
 
   if (!sprite.ready || sprite.frames.length === 0) {
     ctx.fillStyle = "#111";
@@ -327,6 +426,45 @@ function drawNeko() {
   ctx.restore();
 }
 
+function resolveObstacleCollision() {
+  const screen = getScreen();
+  const obstacles = getObstacleInstances(screen);
+  if (obstacles.length === 0) return false;
+
+  let blocked = false;
+
+  const size = getNekoSize();
+  const halfBodyW = size.w * 0.27;
+  const hitLeft = neko.x - halfBodyW;
+  const hitRight = neko.x + halfBodyW;
+  const hitTop = neko.y - size.h * 0.4;
+  const hitBottom = neko.y - 2;
+
+  for (const ob of obstacles) {
+    const obLeft = ob.x;
+    const obRight = ob.x + ob.w;
+    const obTop = ob.y;
+    const obBottom = ob.y + ob.h;
+
+    const overlapX = hitRight > obLeft && hitLeft < obRight;
+    const overlapY = hitBottom > obTop + 2 && hitTop < obBottom - 2;
+
+    if (!overlapX || !overlapY) continue;
+
+    if (neko.vx > 0) {
+      neko.x = obLeft - halfBodyW - 1;
+      neko.vx = 0;
+      blocked = true;
+    } else if (neko.vx < 0) {
+      neko.x = obRight + halfBodyW + 1;
+      neko.vx = 0;
+      blocked = true;
+    }
+  }
+
+  return blocked;
+}
+
 function update(dt) {
   const input = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
   const target = input * neko.maxSpeed;
@@ -337,7 +475,8 @@ function update(dt) {
 
   neko.x += neko.vx * dt;
 
-  const halfWidth = sprite.ready && sprite.frames[0] ? (sprite.frames[0].width * sprite.drawScale) / 2 : 90;
+  const size = getNekoSize();
+  const halfWidth = size.w / 2;
   const minX = halfWidth + 8;
   const maxX = canvas.width - halfWidth - 8;
 
@@ -354,6 +493,10 @@ function update(dt) {
     neko.x = clamp(neko.x, minX, maxX);
   }
 
+  // Ground-level obstacle collisions. Neko must jump over these.
+  const blockedMove = resolveObstacleCollision();
+  neko.blockedMove = blockedMove;
+
   if (Math.abs(neko.vx) > 0.8) {
     neko.facing = Math.sign(neko.vx);
   }
@@ -365,6 +508,9 @@ function update(dt) {
     neko.y = GROUND_Y;
     neko.vy = 0;
   }
+
+  const locomotionTarget = blockedMove && input !== 0 ? 0.16 : clamp(Math.abs(neko.vx) / neko.maxSpeed, 0, 1);
+  neko.animLoco += (locomotionTarget - neko.animLoco) * Math.min(1, dt * 10);
 
   neko.walkTime += dt;
 }

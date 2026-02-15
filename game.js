@@ -4,6 +4,9 @@ ctx.imageSmoothingEnabled = false;
 
 const GROUNd_Y = 414;
 const keys = { left: false, right: false };
+const isMobileLike = window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 900px)").matches;
+
+canvas.style.touchAction = "none";
 
 const neko = {
   x: canvas.width * 0.5,
@@ -269,14 +272,48 @@ function frame(now) {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (isMobileLike) return;
   if (event.key === "ArrowLeft") keys.left = true;
   if (event.key === "ArrowRight") keys.right = true;
 });
 
 window.addEventListener("keyup", (event) => {
+  if (isMobileLike) return;
   if (event.key === "ArrowLeft") keys.left = false;
   if (event.key === "ArrowRight") keys.right = false;
 });
+
+function setTouchDirection(clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const mid = rect.left + rect.width / 2;
+  if (clientX < mid) {
+    keys.left = true;
+    keys.right = false;
+  } else {
+    keys.left = false;
+    keys.right = true;
+  }
+}
+
+if (isMobileLike) {
+  canvas.addEventListener("touchstart", (event) => {
+    event.preventDefault();
+    if (event.touches.length > 0) setTouchDirection(event.touches[0].clientX);
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", (event) => {
+    event.preventDefault();
+    if (event.touches.length > 0) setTouchDirection(event.touches[0].clientX);
+  }, { passive: false });
+
+  const stopTouch = () => {
+    keys.left = false;
+    keys.right = false;
+  };
+
+  canvas.addEventListener("touchend", stopTouch);
+  canvas.addEventListener("touchcancel", stopTouch);
+}
 
 window.addEventListener("blur", () => {
   keys.left = false;

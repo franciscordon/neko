@@ -22,6 +22,7 @@ const neko = {
   decel: 1800,
   walkTime: 0,
   animLoco: 0,
+  animPhase: 0,
   blockedMove: false,
 };
 
@@ -395,8 +396,7 @@ function drawNeko() {
   if (airborne && sprite.jumpFrames.length > 0) {
     frame = neko.vy < 0 ? sprite.jumpFrames[0] : sprite.jumpFrames[1];
   } else {
-    const cadence = 3.2 + speedNorm * 6.2;
-    const phase = moving ? Math.floor((neko.walkTime * cadence) % sprite.frames.length) : 0;
+    const phase = moving ? Math.floor(neko.animPhase % sprite.frames.length) : 0;
     bob = moving && phase % 2 ? 1 : 0;
     frame = sprite.frames[phase];
   }
@@ -511,6 +511,9 @@ function update(dt) {
 
   const locomotionTarget = blockedMove && input !== 0 ? 0.16 : clamp(Math.abs(neko.vx) / neko.maxSpeed, 0, 1);
   neko.animLoco += (locomotionTarget - neko.animLoco) * Math.min(1, dt * 10);
+
+  const cadence = 3.2 + neko.animLoco * 6.2;
+  neko.animPhase += dt * cadence;
 
   neko.walkTime += dt;
 }

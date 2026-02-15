@@ -2,7 +2,10 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: true });
 ctx.imageSmoothingEnabled = false;
 
-const GROUNd_Y = 414;
+const GROUND_Y = 414;
+const GRAVITY = 1300;
+const JUMP_VELOCITY = -560;
+
 const keys = { left: false, right: false };
 const isMobileLike = window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 900px)").matches;
 
@@ -10,7 +13,9 @@ canvas.style.touchAction = "none";
 
 const neko = {
   x: canvas.width * 0.5,
+  y: GROUND_Y,
   vx: 0,
+  vy: 0,
   facing: 1,
   maxSpeed: 220,
   accel: 1300,
@@ -20,6 +25,7 @@ const neko = {
 
 const sprite = {
   frames: [],
+  jumpFrames: [],
   ready: false,
   drawScale: 0.58,
 };
@@ -98,8 +104,14 @@ function approach(current, target, delta) {
   return current;
 }
 
+function tryJump() {
+  if (Math.abs(neko.y - GROUND_Y) < 0.5) {
+    neko.vy = JUMP_VELOCITY;
+  }
+}
+
 function loadFrames() {
-  const sources = [
+  const walkSources = [
     "./assets/neko/frame_01.png",
     "./assets/neko/frame_02.png",
     "./assets/neko/frame_03.png",
@@ -108,19 +120,20 @@ function loadFrames() {
     "./assets/neko/frame_06.png",
   ];
 
-  const loaders = sources.map(
-    (src) =>
-      new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = src;
-      }),
-  );
+  const jumpSources = ["./assets/neko/jump_01.png", "./assets/neko/jump_02.png"];
 
-  Promise.all(loaders)
-    .then((imgs) => {
-      sprite.frames = imgs;
+  const loadImage = (src) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+  Promise.all([Promise.all(walkSources.map(loadImage)), Promise.all(jumpSources.map(loadImage))])
+    .then(([walkImgs, jumpImgs]) => {
+      sprite.frames = walkImgs;
+      sprite.jumpFrames = jumpImgs;
       sprite.ready = true;
     })
     .catch(() => {
@@ -174,52 +187,61 @@ function drawBackground(timeSec) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.fillStyle = "#adb0b8";
-  ctx.fillRect(0, GROUNd_Y - 60, canvas.width, 60);
+  ctx.fillRect(0, GROUND_Y - 60, canvas.width, 60);
 
   drawScenery();
 
   ctx.fillStyle = "#9ca0a9";
-  ctx.fillRect(0, GROUNd_Y, canvas.width, canvas.height - GROUNd_Y);
+  ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
 }
 
 function drawShadow(speedNorm) {
-  const width = 112 - speedNorm * 18;
-  const height = 16 - speedNorm * 2;
+  const air = clamp((GROUND_Y - neko.y) / 120, 0, 1);
+  const width = (112 - speedNorm * 18) * (1 - air * 0.3);
+  const height = (16 - speedNorm * 2) * (1 - air * 0.35);
   ctx.fillStyle = "rgba(27, 13, 16, 0.24)";
   ctx.beginPath();
-  ctx.ellipse(neko.x, GROUNd_Y + 12, width / 2, height / 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(neko.x, GROUND_Y + 12, width / 2, height / 2, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
 function drawNeko() {
   const speedNorm = clamp(Math.abs(neko.vx) / neko.maxSpeed, 0, 1);
   const moving = speedNorm > 0.03;
+  const airborne = neko.y < GROUND_Y - 0.5;
 
   drawShadow(speedNorm);
 
   if (!sprite.ready || sprite.frames.length === 0) {
     ctx.fillStyle = "#111";
-    ctx.fillRect(neko.x - 28, GROUNd_Y - 58, 56, 44);
+    ctx.fillRect(neko.x - 28, neko.y - 58, 56, 44);
     return;
   }
 
-  const cadence = 3.2 + speedNorm * 6.2;
-  const phase = moving ? Math.floor((neko.walkTime * cadence) % sprite.frames.length) : 0;
-  const bob = moving && phase % 2 ? 1 : 0;
+  let frame;
+  let bob = 0;
 
-  const frame = sprite.frames[phase];
+  if (airborne && sprite.jumpFrames.length > 0) {
+    frame = neko.vy < 0 ? sprite.jumpFrames[0] : sprite.jumpFrames[1];
+  } else {
+    const cadence = 3.2 + speedNorm * 6.2;
+    const phase = moving ? Math.floor((neko.walkTime * cadence) % sprite.frames.length) : 0;
+    bob = moving && phase % 2 ? 1 : 0;
+    frame = sprite.frames[phase];
+  }
+
   const w = Math.round(frame.width * sprite.drawScale);
   const h = Math.round(frame.height * sprite.drawScale);
 
   const x = -Math.floor(w / 2);
-  const y = GROUNd_Y - h - 1 + bob;
+  const y = neko.y - h - 1 + bob;
 
   ctx.save();
   ctx.translate(Math.round(neko.x), 0);
   ctx.scale(neko.facing, 1);
   ctx.imageSmoothingEnabled = false;
 
-  // Paint eye color behind the sprite so only transparent eye gaps reveal it.
+  // Paint eye color behind the sprite so transparent eye gaps reveal color.
   const eyeUnderColor = "#dbe86b";
   const eyePatchW = Math.max(46, Math.round(w * 0.27));
   const eyePatchH = Math.max(16, Math.round(h * 0.19));
@@ -250,13 +272,20 @@ function update(dt) {
     neko.facing = Math.sign(neko.vx);
   }
 
+  // Jump physics
+  neko.vy += GRAVITY * dt;
+  neko.y += neko.vy * dt;
+  if (neko.y >= GROUND_Y) {
+    neko.y = GROUND_Y;
+    neko.vy = 0;
+  }
+
   neko.walkTime += dt;
 }
 
 function render(timeSec) {
   drawBackground(timeSec);
   drawNeko();
-
 }
 
 function frame(now) {
@@ -272,6 +301,10 @@ window.addEventListener("keydown", (event) => {
   if (isMobileLike) return;
   if (event.key === "ArrowLeft") keys.left = true;
   if (event.key === "ArrowRight") keys.right = true;
+  if (event.code === "Space") {
+    event.preventDefault();
+    tryJump();
+  }
 });
 
 window.addEventListener("keyup", (event) => {
@@ -279,6 +312,9 @@ window.addEventListener("keyup", (event) => {
   if (event.key === "ArrowLeft") keys.left = false;
   if (event.key === "ArrowRight") keys.right = false;
 });
+
+let touchStartY = 0;
+let touchJumpUsed = false;
 
 function setTouchDirection(clientX) {
   const rect = canvas.getBoundingClientRect();
@@ -293,19 +329,41 @@ function setTouchDirection(clientX) {
 }
 
 if (isMobileLike) {
-  canvas.addEventListener("touchstart", (event) => {
-    event.preventDefault();
-    if (event.touches.length > 0) setTouchDirection(event.touches[0].clientX);
-  }, { passive: false });
+  canvas.addEventListener(
+    "touchstart",
+    (event) => {
+      event.preventDefault();
+      if (event.touches.length > 0) {
+        const touch = event.touches[0];
+        touchStartY = touch.clientY;
+        touchJumpUsed = false;
+        setTouchDirection(touch.clientX);
+      }
+    },
+    { passive: false },
+  );
 
-  canvas.addEventListener("touchmove", (event) => {
-    event.preventDefault();
-    if (event.touches.length > 0) setTouchDirection(event.touches[0].clientX);
-  }, { passive: false });
+  canvas.addEventListener(
+    "touchmove",
+    (event) => {
+      event.preventDefault();
+      if (event.touches.length > 0) {
+        const touch = event.touches[0];
+        setTouchDirection(touch.clientX);
+
+        if (!touchJumpUsed && touchStartY - touch.clientY > 28) {
+          tryJump();
+          touchJumpUsed = true;
+        }
+      }
+    },
+    { passive: false },
+  );
 
   const stopTouch = () => {
     keys.left = false;
     keys.right = false;
+    touchJumpUsed = false;
   };
 
   canvas.addEventListener("touchend", stopTouch);

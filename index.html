@@ -3,29 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Snake Web</title>
+    <title>8-Bit Black Cat</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app">a
-      <header class="topbar">
-        <h1>Snake</h1>
-        <div class="stats">
-          <span>Score: <strong id="score">0</strong></span>
-          <button id="restartBtn" type="button">Restart</button>
-        </div>
-      </header>
-
-      <section class="board-wrap">
-        <canvas id="game" width="480" height="480" aria-label="Snake game board"></canvas>
-        <div id="overlay" class="overlay hidden">
-          <h2>Game Over</h2>
-          <p>Final score: <span id="finalScore">0</span></p>
-          <p>Press Space or Restart</p>
-        </div>
-      </section>
-
-      <p class="help">Use arrow keys or WASD to move. Don’t hit walls or yourself.</p>
+    <main class="game-wrap">
+      <h1>Hello, Neko!</h1>
+      <canvas id="game" width="1600" height="520" aria-label="8-bit black cat game prototype"></canvas>
+      <p>Use Left/Right arrow keys to move. Tap left or right side on mobile.</p>
     </main>
 
     <script src="./game.js"></script>

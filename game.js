@@ -11,6 +11,13 @@ const isMobileLike = window.matchMedia("(pointer: coarse)").matches || window.ma
 
 canvas.style.touchAction = "none";
 
+const controlsHintEl = document.getElementById("controlsHint");
+if (controlsHintEl) {
+  controlsHintEl.textContent = isMobileLike
+    ? "Tap left/right side to move. Swipe up to jump."
+    : "Use Left/Right arrow keys to move and Space to jump.";
+}
+
 const neko = {
   x: canvas.width * 0.5,
   y: GROUND_Y,

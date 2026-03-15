@@ -22,8 +22,8 @@ canvas.style.touchAction = "none";
 const controlsHintEl = document.getElementById("controlsHint");
 if (controlsHintEl) {
   controlsHintEl.textContent = isMobileLike
-    ? "Tap left/right to move. Swipe up to jump. Double tap and hold to fly."
-    : "Use Left/Right to move, Space to jump, and hold Up for anti-gravity.";
+    ? "Mobile: tap left/right to move, swipe up to jump, double tap and hold to fly."
+    : "Desktop: Left/Right to move, Space to jump, hold Up Arrow to fly.";
 }
 
 const neko = {

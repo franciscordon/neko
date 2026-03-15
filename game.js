@@ -22,7 +22,7 @@ canvas.style.touchAction = "none";
 const controlsHintEl = document.getElementById("controlsHint");
 if (controlsHintEl) {
   controlsHintEl.textContent = isMobileLike
-    ? "Tap left/right side to move. Swipe up to jump."
+    ? "Tap left/right to move. Swipe up to jump. Double tap and hold to fly."
     : "Use Left/Right to move, Space to jump, and hold Up for anti-gravity.";
 }
 
@@ -897,6 +897,8 @@ window.addEventListener("keyup", (event) => {
 
 let touchStartY = 0;
 let touchJumpUsed = false;
+let lastTouchStartTime = 0;
+let mobileFlightLatch = false;
 
 function setTouchDirection(clientX) {
   const rect = canvas.getBoundingClientRect();
@@ -916,10 +918,17 @@ if (isMobileLike) {
     (event) => {
       event.preventDefault();
       if (event.touches.length > 0) {
+        const now = performance.now();
         const touch = event.touches[0];
+        const isDoubleTap = now - lastTouchStartTime < 280;
+        lastTouchStartTime = now;
         touchStartY = touch.clientY;
         touchJumpUsed = false;
         setTouchDirection(touch.clientX);
+        if (isDoubleTap) {
+          mobileFlightLatch = true;
+          keys.antiGrav = true;
+        }
       }
     },
     { passive: false },
@@ -932,6 +941,9 @@ if (isMobileLike) {
       if (event.touches.length > 0) {
         const touch = event.touches[0];
         setTouchDirection(touch.clientX);
+        if (mobileFlightLatch) {
+          keys.antiGrav = true;
+        }
 
         if (!touchJumpUsed && touchStartY - touch.clientY > 28) {
           tryJump();
@@ -945,7 +957,9 @@ if (isMobileLike) {
   const stopTouch = () => {
     keys.left = false;
     keys.right = false;
+    keys.antiGrav = false;
     touchJumpUsed = false;
+    mobileFlightLatch = false;
   };
 
   canvas.addEventListener("touchend", stopTouch);

@@ -5,8 +5,16 @@ ctx.imageSmoothingEnabled = false;
 const GROUND_Y = 414;
 const GRAVITY = 1300;
 const JUMP_VELOCITY = -560;
+const MOON_GRAVITY_MULTIPLIER = 0.26;
+const ANTIGRAV_THRUST = 980;
+const ANTIGRAV_MAX_RISE_SPEED = -260;
+const ANTIGRAV_START = 100;
+const ANTIGRAV_MAX = 100;
+const ANTIGRAV_DRAIN_PER_SEC = 15;
+const CAULIFLOWER_RESTORE = 30;
+const EAT_DURATION = 0.42;
 
-const keys = { left: false, right: false };
+const keys = { left: false, right: false, antiGrav: false };
 const isMobileLike = window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 900px)").matches;
 
 canvas.style.touchAction = "none";
@@ -15,7 +23,7 @@ const controlsHintEl = document.getElementById("controlsHint");
 if (controlsHintEl) {
   controlsHintEl.textContent = isMobileLike
     ? "Tap left/right side to move. Swipe up to jump."
-    : "Use Left/Right arrow keys to move and Space to jump.";
+    : "Use Left/Right to move, Space to jump, and hold Up for anti-gravity.";
 }
 
 const neko = {
@@ -31,6 +39,12 @@ const neko = {
   animLoco: 0,
   animPhase: 0,
   blockedMove: false,
+  eatTimer: 0,
+};
+
+const antigrav = {
+  points: ANTIGRAV_START,
+  active: false,
 };
 
 const sprite = {
@@ -64,6 +78,9 @@ const obstaclePalette = {
   o: "#c9894f",
   O: "#8f5f38",
   l: "#d6c37d",
+  r: "#cf4d43",
+  R: "#8c2f2f",
+  y: "#f0d36c",
 };
 
 const treeSprite = [
@@ -102,6 +119,78 @@ const houseSprite = [
   "..oooooooooooooooo..",
 ];
 
+const townhouseSprite = [
+  ".........dd.........",
+  "........dddd........",
+  ".......dDDDDd.......",
+  "......rrrrrrrr......",
+  ".....rHHHHHHHHr.....",
+  "....rHHwwHHwwHHr....",
+  "...rHHHwwHHwwHHHr...",
+  "..rHHHHHHddHHHHHHr..",
+  "..rHHooHHddHHooHHr..",
+  "..rHHooHHooHHooHHr..",
+  "..rHHHHHHooHHHHHHr..",
+  "..hhhhhhhhhhhhhhhh..",
+  "...oooooooooooooo...",
+];
+
+const cottageSprite = [
+  "........tt........",
+  ".......tTTt.......",
+  "......tTTTTt......",
+  ".....rrrrrrrr.....",
+  "....rrHHHHHHrr....",
+  "...rrHHwwwwHHrr...",
+  "..rrHHwwddwwHHrr..",
+  ".rrHHHHHddHHHHHrr.",
+  ".rHHoooHooHoooHHr.",
+  ".rHHoooHooHoooHHr.",
+  ".rHHHHHHHHHHHHHHr.",
+  ".hhhhhhhhhhhhhhhh.",
+  "..oooooooooooooo..",
+];
+
+const tallHouseSprite = [
+  "......dddd......",
+  ".....dDDDDd.....",
+  "....rrrrrrrr....",
+  "...rHHHHHHHHr...",
+  "..rHHwwHHwwHHr..",
+  "..rHHwwHHwwHHr..",
+  "..rHHHHddHHHHr..",
+  "..rHHooHHooHHr..",
+  "..rHHHHddHHHHr..",
+  "..rHHooHHooHHr..",
+  "..rHHHHHHHHHHr..",
+  "..hhhhhhhhhhhh..",
+  "...oooooooooo...",
+];
+
+const villaSprite = [
+  "............dd............",
+  "...........dddd...........",
+  "..........rrrrrr..........",
+  "........rrrrrrrrrr........",
+  "......rrrHHHHHHHHrrr......",
+  ".....rrHHHHwwwwHHHHrr.....",
+  "....rrHHHwwwddwwwHHHrr....",
+  "...rrHHHHHHHddHHHHHHHrr...",
+  "..rrHHoooHHHooHHHoooHHrr..",
+  "..rHHHoooHHHooHHHoooHHHr..",
+  "..rHHHHHHHHHHHHHHHHHHHHr..",
+  "..hhhhhhhhhhhhhhhhhhhhhh..",
+  "...oooooooooooooooooooo...",
+];
+
+const houseSprites = {
+  house: houseSprite,
+  townhouse: townhouseSprite,
+  cottage: cottageSprite,
+  tallHouse: tallHouseSprite,
+  villa: villaSprite,
+};
+
 const obstacleSprites = {
   shoe: [
     "..SSSS....",
@@ -134,7 +223,46 @@ const obstacleSprites = {
     "GggggG",
     "GGGGGG",
   ],
+  barrier: [
+    "....rrrr....",
+    "...rRRRRr...",
+    "..rRRRRRRr..",
+    "..rRRyyRRr..",
+    "..rRRyyRRr..",
+    "..rRRRRRRr..",
+    "...rRRRRr...",
+    "....rrrr....",
+    "..GGGGGGGG..",
+    "..GgllllgG..",
+    "..GgllllgG..",
+    ".....GG.....",
+    ".....GG.....",
+    "....oOOo....",
+    "...ooOOoo...",
+  ],
 };
+
+const cauliflowerPalette = {
+  ".": null,
+  w: "#ece5db",
+  W: "#ffffff",
+  s: "#d8d0c7",
+  g: "#6b9a57",
+  G: "#436d3a",
+};
+
+const cauliflowerSprite = [
+  "....wWw....",
+  "..wwWWWWww..",
+  ".wWWWWWWWWw.",
+  "wWWWssssWWWw",
+  "wWWWWWWWWWWw",
+  ".wWWWWWWWWw.",
+  "..gGGGGGGg..",
+  "..GGgGGgGG..",
+  "...GGGGGG...",
+  "....gGGg....",
+];
 
 const WORLD_SCREENS = [
   {
@@ -145,19 +273,20 @@ const WORLD_SCREENS = [
     glowB: "rgba(230, 170, 165, 0.30)",
     items: [
       { type: "tree", x: 40, y: 255, scale: 5 },
-      { type: "house", x: 150, y: 238, scale: 5 },
+      { type: "townhouse", x: 120, y: 260, scale: 4 },
       { type: "tree", x: 330, y: 265, scale: 5 },
-      { type: "house", x: 500, y: 245, scale: 5 },
+      { type: "cottage", x: 450, y: 258, scale: 4 },
       { type: "tree", x: 690, y: 262, scale: 5 },
-      { type: "house", x: 860, y: 240, scale: 5 },
+      { type: "villa", x: 760, y: 248, scale: 4 },
       { type: "tree", x: 1035, y: 266, scale: 5 },
-      { type: "house", x: 1210, y: 242, scale: 5 },
+      { type: "tallHouse", x: 1180, y: 246, scale: 5 },
       { type: "tree", x: 1390, y: 264, scale: 5 },
-      { type: "house", x: 1495, y: 244, scale: 5 },
+      { type: "townhouse", x: 1460, y: 260, scale: 4 },
     ],
     obstacles: [
       { kind: "shoe", x: 380, scale: 4 },
       { kind: "bag", x: 980, scale: 4 },
+      { kind: "barrier", x: 690, scale: 5 },
     ],
   },
   {
@@ -167,14 +296,14 @@ const WORLD_SCREENS = [
     glowA: "rgba(178, 203, 244, 0.54)",
     glowB: "rgba(149, 177, 223, 0.28)",
     items: [
-      { type: "house", x: 65, y: 242, scale: 5 },
+      { type: "villa", x: 20, y: 250, scale: 4 },
       { type: "tree", x: 260, y: 262, scale: 5 },
       { type: "tree", x: 440, y: 255, scale: 5 },
-      { type: "house", x: 620, y: 240, scale: 5 },
+      { type: "cottage", x: 585, y: 258, scale: 4 },
       { type: "tree", x: 820, y: 264, scale: 5 },
-      { type: "house", x: 980, y: 238, scale: 5 },
+      { type: "tallHouse", x: 955, y: 246, scale: 5 },
       { type: "tree", x: 1165, y: 258, scale: 5 },
-      { type: "house", x: 1335, y: 241, scale: 5 },
+      { type: "townhouse", x: 1310, y: 260, scale: 4 },
       { type: "tree", x: 1490, y: 262, scale: 5 },
     ],
     obstacles: [
@@ -193,15 +322,16 @@ const WORLD_SCREENS = [
       { type: "tree", x: 235, y: 256, scale: 5 },
       { type: "house", x: 390, y: 241, scale: 5 },
       { type: "tree", x: 590, y: 264, scale: 5 },
-      { type: "house", x: 765, y: 243, scale: 5 },
+      { type: "villa", x: 690, y: 248, scale: 4 },
       { type: "tree", x: 965, y: 261, scale: 5 },
-      { type: "house", x: 1135, y: 238, scale: 5 },
+      { type: "cottage", x: 1100, y: 258, scale: 4 },
       { type: "tree", x: 1320, y: 258, scale: 5 },
-      { type: "house", x: 1475, y: 244, scale: 5 },
+      { type: "tallHouse", x: 1450, y: 246, scale: 5 },
     ],
     obstacles: [
       { kind: "crate", x: 300, scale: 5 },
       { kind: "bag", x: 1080, scale: 4 },
+      { kind: "barrier", x: 815, scale: 5 },
     ],
   },
   {
@@ -211,14 +341,14 @@ const WORLD_SCREENS = [
     glowA: "rgba(210, 233, 194, 0.5)",
     glowB: "rgba(177, 211, 162, 0.24)",
     items: [
-      { type: "house", x: 40, y: 240, scale: 5 },
+      { type: "townhouse", x: 30, y: 260, scale: 4 },
       { type: "tree", x: 230, y: 264, scale: 5 },
-      { type: "house", x: 405, y: 244, scale: 5 },
+      { type: "villa", x: 330, y: 248, scale: 4 },
       { type: "tree", x: 585, y: 259, scale: 5 },
       { type: "tree", x: 740, y: 266, scale: 5 },
-      { type: "house", x: 895, y: 238, scale: 5 },
+      { type: "cottage", x: 860, y: 258, scale: 4 },
       { type: "tree", x: 1095, y: 262, scale: 5 },
-      { type: "house", x: 1260, y: 245, scale: 5 },
+      { type: "tallHouse", x: 1235, y: 246, scale: 5 },
       { type: "tree", x: 1450, y: 258, scale: 5 },
     ],
     obstacles: [
@@ -230,6 +360,7 @@ const WORLD_SCREENS = [
 
 let currentScreen = 0;
 let lastTime = performance.now();
+const cauliflowerState = createCauliflowerState();
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -245,6 +376,11 @@ function getScreen() {
   const len = WORLD_SCREENS.length;
   const i = ((currentScreen % len) + len) % len;
   return WORLD_SCREENS[i];
+}
+
+function getScreenIndex() {
+  const len = WORLD_SCREENS.length;
+  return ((currentScreen % len) + len) % len;
 }
 
 function getNekoSize() {
@@ -269,6 +405,39 @@ function getObstacleInstances(screen) {
       h,
       y: GROUND_Y - h,
     };
+  });
+}
+
+function createCauliflowerState() {
+  return WORLD_SCREENS.map((screen) => {
+    const obstacles = getObstacleInstances(screen);
+    const count = Math.random() < 0.7 ? 1 : 2;
+    const scale = 4;
+    const w = cauliflowerSprite[0].length * scale;
+    const h = cauliflowerSprite.length * scale;
+    const minX = 90;
+    const maxX = canvas.width - w - 90;
+    const items = [];
+
+    let attempts = 0;
+    while (items.length < count && attempts < 60) {
+      attempts += 1;
+      const x = Math.round(minX + Math.random() * (maxX - minX));
+      const nearObstacle = obstacles.some((ob) => x + w > ob.x - 34 && x < ob.x + ob.w + 34);
+      const nearOtherCauliflower = items.some((item) => Math.abs(item.x - x) < 90);
+      if (nearObstacle || nearOtherCauliflower) continue;
+
+      items.push({
+        x,
+        y: GROUND_Y - h + 3,
+        w,
+        h,
+        scale,
+        eaten: false,
+      });
+    }
+
+    return items;
   });
 }
 
@@ -327,7 +496,8 @@ function drawScenery(screen) {
     if (item.type === "tree") {
       drawPixelArt(treeSprite, item.x, item.y, item.scale);
     } else {
-      drawPixelArt(houseSprite, item.x, item.y, item.scale);
+      const spriteRows = houseSprites[item.type] || houseSprite;
+      drawPixelArt(spriteRows, item.x, item.y, item.scale);
     }
   }
 }
@@ -335,6 +505,14 @@ function drawScenery(screen) {
 function drawObstacles(screen) {
   for (const ob of getObstacleInstances(screen)) {
     drawPixelArt(ob.rows, ob.x, ob.y, ob.scale, obstaclePalette);
+  }
+}
+
+function drawCauliflowers() {
+  const items = cauliflowerState[getScreenIndex()] || [];
+  for (const item of items) {
+    if (item.eaten) continue;
+    drawPixelArt(cauliflowerSprite, item.x, item.y, item.scale, cauliflowerPalette);
   }
 }
 
@@ -371,6 +549,7 @@ function drawBackground(timeSec) {
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
 
   drawObstacles(screen);
+  drawCauliflowers();
 }
 
 function drawShadow(speedNorm) {
@@ -388,6 +567,10 @@ function drawNeko() {
   const speedNorm = clamp(neko.animLoco, 0, 1);
   const moving = speedNorm > 0.03;
   const airborne = neko.y < GROUND_Y - 0.5;
+  const flying = antigrav.active && airborne;
+  const eating = neko.eatTimer > 0 && !airborne;
+  const eatProgress = eating ? 1 - neko.eatTimer / EAT_DURATION : 0;
+  const eatBend = eating ? Math.sin(Math.min(1, eatProgress * 1.35) * Math.PI) : 0;
 
   drawShadow(speedNormPhysical);
 
@@ -402,6 +585,9 @@ function drawNeko() {
 
   if (airborne && sprite.jumpFrames.length > 0) {
     frame = neko.vy < 0 ? sprite.jumpFrames[0] : sprite.jumpFrames[1];
+  } else if (eating) {
+    frame = sprite.frames[0];
+    bob = 3;
   } else {
     const phase = moving ? Math.floor(neko.animPhase % sprite.frames.length) : 0;
     bob = moving && phase % 2 ? 1 : 0;
@@ -415,8 +601,17 @@ function drawNeko() {
   const y = neko.y - h - 1 + bob;
 
   ctx.save();
-  ctx.translate(Math.round(neko.x), 0);
+  ctx.translate(Math.round(neko.x), flying ? Math.round(Math.sin(neko.walkTime * 14) * 2) : 0);
   ctx.scale(neko.facing, 1);
+  if (eating) {
+    const pivotX = x - Math.round(w * 0.1);
+    const pivotY = y + Math.round(h * 0.78);
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate((18 * eatBend * Math.PI) / 180);
+    ctx.translate(-pivotX, -pivotY);
+  } else if (flying) {
+    ctx.rotate((-10 * Math.PI) / 180);
+  }
   ctx.imageSmoothingEnabled = false;
 
   // Paint eye color behind the sprite so transparent eye gaps reveal color.
@@ -429,7 +624,101 @@ function drawNeko() {
   ctx.fillStyle = eyeUnderColor;
   ctx.fillRect(eyePatchX, eyePatchY, eyePatchW, eyePatchH);
 
+  const pupilW = Math.max(3, Math.round(eyePatchW * 0.12));
+  const pupilH = Math.max(5, Math.round(eyePatchH * 0.5));
+  const pupilY = eyePatchY + Math.max(2, Math.round(eyePatchH * 0.18));
+  const pupilOffset = flying ? 1 : 0;
+  const leftPupilX = eyePatchX + Math.round(eyePatchW * 0.24) + pupilOffset;
+  const rightPupilX = eyePatchX + Math.round(eyePatchW * 0.62) + pupilOffset;
+
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(leftPupilX, pupilY, pupilW, pupilH);
+  ctx.fillRect(rightPupilX, pupilY, pupilW, pupilH);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+  ctx.fillRect(leftPupilX, pupilY, Math.max(1, pupilW - 1), 1);
+  ctx.fillRect(rightPupilX, pupilY, Math.max(1, pupilW - 1), 1);
+
+  if (flying) {
+    ctx.fillStyle = "#0a0a0d";
+    ctx.fillRect(x + Math.round(w * 0.19), y + Math.round(h * 0.63), Math.round(w * 0.17), Math.round(h * 0.14));
+    ctx.fillRect(x + Math.round(w * 0.33), y + Math.round(h * 0.56), Math.round(w * 0.16), Math.round(h * 0.13));
+    ctx.fillRect(x + Math.round(w * 0.56), y + Math.round(h * 0.64), Math.round(w * 0.15), Math.round(h * 0.12));
+    ctx.fillRect(x + Math.round(w * 0.67), y + Math.round(h * 0.57), Math.round(w * 0.12), Math.round(h * 0.11));
+  }
+
   ctx.drawImage(frame, x, y, w, h);
+
+  if (flying) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.fillRect(x + Math.round(w * 0.28), y + Math.round(h * 0.18), Math.round(w * 0.18), Math.round(h * 0.05));
+    ctx.fillRect(x + Math.round(w * 0.5), y + Math.round(h * 0.22), Math.round(w * 0.12), Math.round(h * 0.04));
+  }
+
+  if (eating) {
+    const biteWave = Math.sin(eatProgress * Math.PI * 2.8);
+    const chewOpen = Math.max(0, biteWave);
+    const headDip = Math.round(3 + eatBend * 7);
+    const headShift = Math.round(4 + eatBend * 6);
+    const mouthX = x + Math.round(w * 0.69) - headShift;
+    const mouthY = y + Math.round(h * 0.66) + headDip;
+    const cauliflowerX = x + Math.round(w * 0.73);
+    const cauliflowerY = y + Math.round(h * 0.82);
+
+    ctx.fillStyle = "#0a0a0d";
+    ctx.fillRect(x + Math.round(w * 0.17), y + Math.round(h * 0.72), Math.round(w * 0.18), Math.round(h * 0.11));
+    ctx.fillRect(x + Math.round(w * 0.31), y + Math.round(h * 0.66), Math.round(w * 0.17), Math.round(h * 0.1));
+
+    ctx.fillStyle = "#0a0a0d";
+    ctx.fillRect(x + Math.round(w * 0.62) - headShift, y + Math.round(h * 0.38) + headDip, Math.round(w * 0.16), Math.round(h * 0.1));
+    ctx.fillRect(x + Math.round(w * 0.68) - headShift, y + Math.round(h * 0.5) + headDip, Math.round(w * 0.14), Math.round(h * 0.08));
+
+    ctx.fillStyle = "#f4efe8";
+    ctx.fillRect(cauliflowerX, cauliflowerY + 3, 15, 9);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(cauliflowerX + 2, cauliflowerY, 11, 7);
+    ctx.fillRect(cauliflowerX + 9, cauliflowerY + 4, 5, 4);
+    ctx.fillStyle = "#5a8b56";
+    ctx.fillRect(cauliflowerX - 4, cauliflowerY + 8, 7, 6);
+    ctx.fillRect(cauliflowerX + 2, cauliflowerY + 11, 5, 5);
+
+    ctx.fillStyle = "#0a0a0d";
+    ctx.fillRect(mouthX - 2, mouthY + 1, 12, 4 + Math.round(chewOpen * 4));
+    ctx.fillStyle = "#f6c4d2";
+    ctx.fillRect(mouthX, mouthY + 3, 9, 2 + Math.round(chewOpen * 5));
+
+    ctx.fillStyle = "rgba(244, 239, 232, 0.98)";
+    ctx.fillRect(mouthX + 12 + Math.round(chewOpen * 2), mouthY + 2, 4, 4);
+    ctx.fillRect(mouthX + 17 - Math.round(chewOpen * 3), mouthY + 8, 3, 3);
+    ctx.fillRect(mouthX + 8, mouthY + 13 + Math.round(chewOpen * 2), 2, 2);
+  }
+
+  ctx.restore();
+}
+
+function drawHud() {
+  const meterX = 22;
+  const meterY = 22;
+  const meterW = 220;
+  const meterH = 18;
+  const fill = clamp(antigrav.points / ANTIGRAV_MAX, 0, 1);
+
+  ctx.save();
+  ctx.font = '18px "Avenir Next", "Segoe UI", sans-serif';
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgba(18, 15, 25, 0.74)";
+  ctx.fillRect(meterX - 10, meterY - 10, meterW + 220, 56);
+
+  ctx.fillStyle = "#f4f0ff";
+  ctx.fillText(`Anti-gravity: ${Math.ceil(antigrav.points)} / ${ANTIGRAV_MAX}`, meterX, meterY);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.fillRect(meterX, meterY + 26, meterW, meterH);
+  ctx.fillStyle = antigrav.active ? "#8ef0ff" : "#b8b1d9";
+  ctx.fillRect(meterX, meterY + 26, Math.round(meterW * fill), meterH);
+  ctx.strokeStyle = "rgba(244, 240, 255, 0.7)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(meterX, meterY + 26, meterW, meterH);
   ctx.restore();
 }
 
@@ -472,8 +761,35 @@ function resolveObstacleCollision() {
   return blocked;
 }
 
+function collectCauliflowers() {
+  const items = cauliflowerState[getScreenIndex()] || [];
+  const size = getNekoSize();
+  const halfBodyW = size.w * 0.25;
+  const hitLeft = neko.x - halfBodyW;
+  const hitRight = neko.x + halfBodyW;
+  const hitTop = neko.y - size.h * 0.34;
+  const hitBottom = neko.y + 4;
+
+  for (const item of items) {
+    if (item.eaten) continue;
+
+    const overlapX = hitRight > item.x && hitLeft < item.x + item.w;
+    const overlapY = hitBottom > item.y && hitTop < item.y + item.h;
+    if (!overlapX || !overlapY) continue;
+
+    item.eaten = true;
+    antigrav.points = Math.min(ANTIGRAV_MAX, antigrav.points + CAULIFLOWER_RESTORE);
+    neko.eatTimer = EAT_DURATION;
+    neko.vx = 0;
+    break;
+  }
+}
+
 function update(dt) {
-  const input = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  neko.eatTimer = Math.max(0, neko.eatTimer - dt);
+
+  const eating = neko.eatTimer > 0;
+  const input = eating ? 0 : (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
   const target = input * neko.maxSpeed;
   const rate = input !== 0 ? neko.accel : neko.decel;
 
@@ -486,6 +802,7 @@ function update(dt) {
   const halfWidth = size.w / 2;
   const minX = halfWidth + 8;
   const maxX = canvas.width - halfWidth - 8;
+  const minVisibleY = size.h + 10;
 
   // Screen transitions at full left/right edges.
   if (neko.x > maxX && neko.vx > 0) {
@@ -503,17 +820,34 @@ function update(dt) {
   // Ground-level obstacle collisions. Neko must jump over these.
   const blockedMove = resolveObstacleCollision();
   neko.blockedMove = blockedMove;
+  collectCauliflowers();
 
   if (Math.abs(neko.vx) > 0.8) {
     neko.facing = Math.sign(neko.vx);
   }
 
+  const antigravRequested = !eating && keys.antiGrav && antigrav.points > 0;
+  antigrav.active = antigravRequested;
+  if (antigrav.active) {
+    antigrav.points = Math.max(0, antigrav.points - ANTIGRAV_DRAIN_PER_SEC * dt);
+  }
+
   // Jump physics
-  neko.vy += GRAVITY * dt;
+  const gravity = antigrav.active ? GRAVITY * MOON_GRAVITY_MULTIPLIER : GRAVITY;
+  neko.vy += gravity * dt;
+  if (antigrav.active) {
+    neko.vy -= ANTIGRAV_THRUST * dt;
+    neko.vy = Math.max(neko.vy, ANTIGRAV_MAX_RISE_SPEED);
+  }
   neko.y += neko.vy * dt;
+  if (neko.y < minVisibleY) {
+    neko.y = minVisibleY;
+    neko.vy = Math.max(0, neko.vy);
+  }
   if (neko.y >= GROUND_Y) {
     neko.y = GROUND_Y;
     neko.vy = 0;
+    antigrav.active = false;
   }
 
   const locomotionTarget = blockedMove && input !== 0 ? 0.16 : clamp(Math.abs(neko.vx) / neko.maxSpeed, 0, 1);
@@ -528,6 +862,7 @@ function update(dt) {
 function render(timeSec) {
   drawBackground(timeSec);
   drawNeko();
+  drawHud();
 }
 
 function frame(now) {
@@ -543,6 +878,10 @@ window.addEventListener("keydown", (event) => {
   if (isMobileLike) return;
   if (event.key === "ArrowLeft") keys.left = true;
   if (event.key === "ArrowRight") keys.right = true;
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    keys.antiGrav = true;
+  }
   if (event.code === "Space") {
     event.preventDefault();
     tryJump();
@@ -553,6 +892,7 @@ window.addEventListener("keyup", (event) => {
   if (isMobileLike) return;
   if (event.key === "ArrowLeft") keys.left = false;
   if (event.key === "ArrowRight") keys.right = false;
+  if (event.key === "ArrowUp") keys.antiGrav = false;
 });
 
 let touchStartY = 0;
@@ -615,6 +955,8 @@ if (isMobileLike) {
 window.addEventListener("blur", () => {
   keys.left = false;
   keys.right = false;
+  keys.antiGrav = false;
+  antigrav.active = false;
 });
 
 loadFrames();

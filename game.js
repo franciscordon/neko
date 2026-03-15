@@ -22,7 +22,7 @@ canvas.style.touchAction = "none";
 const controlsHintEl = document.getElementById("controlsHint");
 if (controlsHintEl) {
   controlsHintEl.textContent = isMobileLike
-    ? "Mobile: tap left/right to move, swipe up to jump, double tap and hold to fly."
+    ? "Mobile: tap left/right to move, swipe up to jump, double tap to fly."
     : "Desktop: Left/Right to move, Space to jump, hold Up Arrow to fly.";
 }
 
@@ -898,6 +898,8 @@ window.addEventListener("keyup", (event) => {
 let touchStartY = 0;
 let touchJumpUsed = false;
 let lastTouchStartTime = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
 let mobileFlightLatch = false;
 
 function setTouchDirection(clientX) {
@@ -920,15 +922,20 @@ if (isMobileLike) {
       if (event.touches.length > 0) {
         const now = performance.now();
         const touch = event.touches[0];
-        const isDoubleTap = now - lastTouchStartTime < 280;
+        const isDoubleTap =
+          now - lastTouchStartTime < 380 &&
+          Math.abs(touch.clientX - lastTouchX) < 48 &&
+          Math.abs(touch.clientY - lastTouchY) < 48;
         lastTouchStartTime = now;
+        lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
         touchStartY = touch.clientY;
         touchJumpUsed = false;
         setTouchDirection(touch.clientX);
         if (isDoubleTap) {
-          mobileFlightLatch = true;
-          keys.antiGrav = true;
+          mobileFlightLatch = !mobileFlightLatch;
         }
+        keys.antiGrav = mobileFlightLatch;
       }
     },
     { passive: false },
@@ -941,9 +948,7 @@ if (isMobileLike) {
       if (event.touches.length > 0) {
         const touch = event.touches[0];
         setTouchDirection(touch.clientX);
-        if (mobileFlightLatch) {
-          keys.antiGrav = true;
-        }
+        keys.antiGrav = mobileFlightLatch;
 
         if (!touchJumpUsed && touchStartY - touch.clientY > 28) {
           tryJump();
@@ -957,9 +962,8 @@ if (isMobileLike) {
   const stopTouch = () => {
     keys.left = false;
     keys.right = false;
-    keys.antiGrav = false;
+    keys.antiGrav = mobileFlightLatch;
     touchJumpUsed = false;
-    mobileFlightLatch = false;
   };
 
   canvas.addEventListener("touchend", stopTouch);
@@ -971,6 +975,7 @@ window.addEventListener("blur", () => {
   keys.right = false;
   keys.antiGrav = false;
   antigrav.active = false;
+  mobileFlightLatch = false;
 });
 
 loadFrames();
